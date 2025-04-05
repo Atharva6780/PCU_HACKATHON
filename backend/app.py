@@ -1,45 +1,82 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from translator import MultiLanguageTranslator
 import os
 from werkzeug.utils import secure_filename
-from denoise import remove_noise
+import uuid
 
 app = Flask(__name__)
-CORS(app)  # Allow frontend to connect
+CORS(app)  # Enable CORS for all routes
 
-UPLOAD_FOLDER = "uploads"
-PROCESSED_FOLDER = "processed"
-
+# Configure folders
+UPLOAD_FOLDER = 'uploads'
+PROCESSED_FOLDER = 'processed'
+AUDIO_OUTPUT_FOLDER = 'static/audio_output'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
+os.makedirs(AUDIO_OUTPUT_FOLDER, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {"wav", "mp3", "flac", "ogg", "m4a"}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['PROCESSED_FOLDER'] = PROCESSED_FOLDER
+app.config['AUDIO_OUTPUT_FOLDER'] = AUDIO_OUTPUT_FOLDER
 
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+translator = MultiLanguageTranslator()
 
-@app.route("/upload", methods=["POST"])
-def upload_file():
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+@app.route('/translate', methods=['POST'])
+def translate_audio():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file:
+        try:
+            # Get parameters
+            source_lang = request.form.get('source_lang', 'en')
+            target_lang = request.form.get('target_lang', 'hi')
+            voice_type = int(request.form.get('voice_type', 1))
+            
+            # Save file
+            filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # Generate audio output filename
+            output_filename = f"translated_{uuid.uuid4()}.mp3"
+            output_path = os.path.join(app.config['AUDIO_OUTPUT_FOLDER'], output_filename)
+            
+            # Use the complete translation pipeline
+            result = translator.full_translation_pipeline(
+                filepath,
+                source_lang,
+                target_lang,
+                voice_option=voice_type,
+                output_audio_path=output_path
+            )
+            
+            # Check for errors
+            if 'error' in result:
+                return jsonify({'error': result['error']}), 500
+                
+            # Add audio URL to result
+            result['audio_url'] = f"/audio_output/{output_filename}"
+            
+            return jsonify(result)
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
-    file = request.files["file"]
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
+@app.route('/audio_output/<filename>')
+def serve_audio(filename):
+    return send_from_directory(app.config['AUDIO_OUTPUT_FOLDER'], filename)
 
-        # Process audio
-        output_path = os.path.join(PROCESSED_FOLDER, "cleaned_" + filename)
-        remove_noise(filepath, output_path)
+@app.route('/languages', methods=['GET'])
+def get_languages():
+    """Get list of supported languages"""
+    languages = translator.get_supported_languages()
+    return jsonify(languages)
 
-        return jsonify({"processed_file": f"http://127.0.0.1:5000/download/cleaned_{filename}"})
-
-    return jsonify({"error": "Invalid file format"}), 400
-
-@app.route("/download/<filename>")
-def download_file(filename):
-    return send_file(os.path.join(PROCESSED_FOLDER, filename), as_attachment=True)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Menu, X, Mic, MessageSquare, Volume2, Brain, Copy, Youtube } from 'lucide-react';
+import { Menu, X, Mic, MessageSquare, Volume2, Brain, Copy, Youtube,Languages } from 'lucide-react';
 
 import TextToSpeech from './components/text_to_speech';
 import SpeechToText from './components/speech_to_text';
@@ -10,16 +10,16 @@ import Dubbing from './components/dubbing';
 import Cloning from './components/cloning';
 import YoutubeUploader from './components/youtube_uploader';
 import HomePage from './components/HomePage';
+import AudioTranslator from './components/translation';
 
 function Sidebar({ isOpen, setIsOpen }) {
   const menuItems = [
     { title: 'Text to Speech', icon: MessageSquare, path: '/text-to-speech' },
-    { title: 'Speech to Text', icon: Mic, path: '/speech-to-text' },
     { title: 'Background Noise', icon: Volume2, path: '/background-noise' },
-    { title: 'Interview Prep', icon: Brain, path: '/interview-prep' },
     { title: 'Dubbing', icon: Copy, path: '/dubbing' },
     { title: 'Voice Cloning', icon: Mic, path: '/cloning' },
     { title: 'YouTube AI Uploader', icon: Youtube, path: '/youtube-uploader' },
+    { title: 'Audio-Translation', icon: Languages, path: '/audio-translation' },
   ];
 
   return (
@@ -80,6 +80,7 @@ function AppWithRouter() {
           <Route path="/dubbing" element={<Dubbing />} />
           <Route path="/cloning" element={<Cloning />} />
           <Route path="/youtube-uploader" element={<YoutubeUploader />} />
+          <Route path="/audio-translation" element={<AudioTranslator />} />
         </Routes>
       </div>
 
