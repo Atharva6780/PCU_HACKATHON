@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, send_file, jsonify, send_from_directory
 from flask_cors import CORS
 from translator import MultiLanguageTranslator
 import os
 from werkzeug.utils import secure_filename
 import uuid
+from denoise import remove_noise
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -21,6 +22,32 @@ app.config['PROCESSED_FOLDER'] = PROCESSED_FOLDER
 app.config['AUDIO_OUTPUT_FOLDER'] = AUDIO_OUTPUT_FOLDER
 
 translator = MultiLanguageTranslator()
+ALLOWED_EXTENSIONS = {"wav", "mp3", "flac", "ogg", "m4a"}
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+
+        # Process audio
+        output_path = os.path.join(PROCESSED_FOLDER, "cleaned_" + filename)
+        remove_noise(filepath, output_path)
+
+        return jsonify({"processed_file": f"http://127.0.0.1:5000/download/cleaned_{filename}"})
+
+    return jsonify({"error": "Invalid file format"}), 400
+
+@app.route("/download/<filename>")
+def download_file(filename):
+    return send_file(os.path.join(PROCESSED_FOLDER, filename), as_attachment=True)
 
 @app.route('/translate', methods=['POST'])
 def translate_audio():
